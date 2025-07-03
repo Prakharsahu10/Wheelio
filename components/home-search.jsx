@@ -1,54 +1,42 @@
 "use client";
-
-import { useState, useEffect } from "react";
-import { Search, Upload, Camera } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
+import React, { useState } from "react";
+import { Input } from "./ui/input";
+import { Camera, Upload } from "lucide-react";
+import { Button } from "./ui/button";
 import { useDropzone } from "react-dropzone";
+import { toast } from "sonner";
+import { set } from "date-fns";
 import { useRouter } from "next/navigation";
-import { processImageSearch } from "@/actions/home";
-import useFetch from "@/hooks/use-fetch";
 
-export function HomeSearch() {
-  const router = useRouter();
+const HomeSearch = () => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [searchImage, setSearchImage] = useState(null);
-  const [imagePreview, setImagePreview] = useState("");
-  const [isUploading, setIsUploading] = useState(false);
   const [isImageSearchActive, setIsImageSearchActive] = useState(false);
+  const [imagePreview, setImagePreview] = useState();
+  const [searchImage, setSearchImage] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
 
-  const {
-    loading: isProcessing,
-    fn: processImageFn,
-    data: processResult,
-    error: processError,
-  } = useFetch(processImageSearch);
+  const router = useRouter();
 
-  useEffect(() => {
-    if (processResult?.success) {
-      const params = new URLSearchParams();
-
-      if (processResult.data.make) params.set("make", processResult.data.make);
-      if (processResult.data.bodyType)
-        params.set("bodyType", processResult.data.bodyType);
-      if (processResult.data.color)
-        params.set("color", processResult.data.color);
-
-      router.push(`/cars?${params.toString()}`);
+  const handleTextSubmit = (e) => {
+    e.preventDefault();
+    if (!searchTerm.trim()) {
+      toast.error("Please enter a search term");
+      return;
     }
-  }, [processResult, router]);
+    router.push(`/cars?search=${encodeURIComponent(searchTerm)}`);
+  };
 
-  useEffect(() => {
-    if (processError) {
-      toast.error(
-        "Failed to analyze image: " + (processError.message || "Unknown error")
-      );
+  const handleImageSearch = async (e) => {
+    e.preventDefault();
+    if (!searchImage) {
+      toast.error("Please upload an image to search");
+      return;
     }
-  }, [processError]);
+  };
 
   const onDrop = (acceptedFiles) => {
     const file = acceptedFiles[0];
+
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
         toast.error("Image size must be less than 5MB");
@@ -64,10 +52,12 @@ export function HomeSearch() {
         setIsUploading(false);
         toast.success("Image uploaded successfully");
       };
+
       reader.onerror = () => {
         setIsUploading(false);
-        toast.error("Failed to read the image");
+        toast.error("Error reading image file");
       };
+
       reader.readAsDataURL(file);
     }
   };
@@ -76,45 +66,22 @@ export function HomeSearch() {
     useDropzone({
       onDrop,
       accept: {
-        "image/*": [".jpeg", ".jpg", ".png"],
+        "image/*": [".jpeg", ".jpg", ".png", ".gif", ".webp"],
       },
-      maxFiles: 1,
     });
-
-  const handleTextSearch = (e) => {
-    e.preventDefault();
-    if (!searchTerm.trim()) {
-      toast.error("Please enter a search term");
-      return;
-    }
-
-    router.push(`/cars?search=${encodeURIComponent(searchTerm)}`);
-  };
-
-  const handleImageSearch = async (e) => {
-    e.preventDefault();
-    if (!searchImage) {
-      toast.error("Please upload an image first");
-      return;
-    }
-
-    await processImageFn(searchImage);
-  };
 
   return (
     <div>
-      <form onSubmit={handleTextSearch}>
+      <form onSubmit={handleTextSubmit}>
         <div className="relative flex items-center">
-          <Search className="absolute left-3 w-5 h-5" />
           <Input
             type="text"
-            placeholder="Enter make, model, or use our AI Image Search..."
-            value={searchTerm}
+            placeholder="Enter make, model, or use our AI image Search..."
             onChange={(e) => setSearchTerm(e.target.value)}
+            value={searchTerm}
             className="pl-10 pr-12 py-6 w-full rounded-full border-gray-300 bg-white/95 backdrop-blur-sm"
           />
 
-          {/* Image Search Button */}
           <div className="absolute right-[100px]">
             <Camera
               size={35}
@@ -135,13 +102,13 @@ export function HomeSearch() {
 
       {isImageSearchActive && (
         <div className="mt-4">
-          <form onSubmit={handleImageSearch} className="space-y-4">
+          <form onSubmit={handleImageSearch}>
             <div className="border-2 border-dashed border-gray-300 rounded-3xl p-6 text-center">
               {imagePreview ? (
                 <div className="flex flex-col items-center">
                   <img
                     src={imagePreview}
-                    alt="Car preview"
+                    alt="Uploaded Preview"
                     className="h-40 object-contain mb-4"
                   />
                   <Button
@@ -149,7 +116,7 @@ export function HomeSearch() {
                     onClick={() => {
                       setSearchImage(null);
                       setImagePreview("");
-                      toast.info("Image removed");
+                      toast.info("Image search cleared");
                     }}
                   >
                     Remove Image
@@ -166,27 +133,18 @@ export function HomeSearch() {
                         : "Drag & drop a car image or click to select"}
                     </p>
                     {isDragReject && (
-                      <p className="text-red-500 mb-2">Invalid image type</p>
+                      <p className="text-red-500">
+                        Unsupported file type. Please upload an image.
+                      </p>
                     )}
-                    <p className="text-gray-400 text-sm">
-                      Supports: JPG, PNG (max 5MB)
-                    </p>
                   </div>
                 </div>
               )}
             </div>
 
             {imagePreview && (
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={isUploading || isProcessing}
-              >
-                {isUploading
-                  ? "Uploading..."
-                  : isProcessing
-                    ? "Analyzing image..."
-                    : "Search with this Image"}
+              <Button type="submit" className="w-full" disabled={isUploading}>
+                {isUploading ? "Searching..." : "Search by Image"}
               </Button>
             )}
           </form>
@@ -194,4 +152,6 @@ export function HomeSearch() {
       )}
     </div>
   );
-}
+};
+
+export default HomeSearch;
